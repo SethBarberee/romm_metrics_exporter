@@ -2,27 +2,31 @@
 
 These metrics are identified from the ROMM OpenAPI spec but not yet implemented in `src/main.rs`.
 
-## Option 3: Category from Name Prefix (from `/api/roms`)
+## Option 3: Category from Name Prefix (from `/api/roms`) - DONE
 - Parse category from ROM name prefix (e.g., `~category~name`)
 - Metric: `romm_category{category="game"} 5000`
 
-## Option 4: File Structure (from `/api/roms`)
+## Option 4: File Structure (from `/api/roms`) - DONE
 - Count ROMs by storage format (single file, multiple files, nested folder, easyrpg, other)
 - Metric: `romm_file_structure{type="single"} 8900`
 
-## Option 5: Hash Coverage (from `/api/roms`)
-- Count ROMs by available hash checksum type (CRC, MD5, SHA1, RHash, none)
+## Option 5: Hash Coverage (from `/api/roms`) - DONE
+- Count ROMs by available hash checksum type (CRC, MD5, SHA1, RHash)
 - Metric: `romm_hash_coverage{hash_type="crc"} 7500`
 
-## Option 6: Integrity State (from `/api/roms`)
-- Count ROMs by integrity state (identified, unidentified, physical, missing)
-- Metric: `romm_integrity_state{state="identified"} 12000`
+## Option 6: ROM Manual Flag (from `/api/roms`) - DONE
+- Count ROMs by has_manual boolean flag
+- Metric: `romm_roms_with_manual{has_manual="true"} 5000`
 
-## Option 7: ROM Metadata Flags (from `/api/roms`)
+## Option 7: Integrity State (from `/api/roms`) - DONE
+- Count ROMs by integrity state (identified, unidentified, physical, missing)
+- Metric: `romm_rom_integrity{state="identified"} 12000`
+
+## Option 8: ROM Metadata Flags (from `/api/roms`)
 - Aggregate boolean metadata flags from ROM entries
 - Metric: `romm_metadata{flag="some_flag"} 3000`
 
-## Option 8: Missing / Unidentified ROMs (from `/api/roms` filter)
+## Option 9: Missing / Unidentified ROMs (from `/api/roms` filter)
 - Count ROMs by integrity state (missing_from_fs, unidentified, identified, physical)
 - Metric: `romm_rom_integrity{state="missing_from_fs"} 150`
 
@@ -47,7 +51,7 @@ These metrics are identified from the ROMM OpenAPI spec but not yet implemented 
 - Metric: `romm_tasks_status{task="scan" status="completed"} 42`
 
 ## Option 14: Audio/Soundtrack / Media Flags (from `/api/roms`)
-- Count ROMs with associated media: soundtrack, manual, screenshot, notes, youtube video, video
+- Count ROMs with associated media: soundtrack screenshot, notes, youtube video, video
 - Metric: `romm_has_screenshot 8900`
 
 ## Option 15: Language & Age Distribution (from `/api/roms`)
