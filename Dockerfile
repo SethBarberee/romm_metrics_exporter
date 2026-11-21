@@ -2,7 +2,7 @@ FROM rust:slim-bookworm AS builder
 
 WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get install -y musl-tools
+RUN apt-get update && apt-get install -y musl-tools openssl libssl-dev
 RUN rustup target add x86_64-unknown-linux-musl
 
 COPY . .
