@@ -627,7 +627,7 @@ async fn main()  -> Result<(), Box<dyn Error>>{
 
     // Define the address (localhost:3000)
     // TODO: add env variable to change port
-    let addr = SocketAddr::from_str("127.0.0.1:3000").unwrap();
+    let addr = SocketAddr::from_str("0.0.0.0:3000").unwrap();
     println!("Server running at http://{}", addr);
 
     // Start the hyper/axum server
