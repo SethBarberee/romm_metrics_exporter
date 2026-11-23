@@ -6,6 +6,7 @@ use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, LazyLock};
+use std::collections::HashMap;
 
 use reqwest::Client;
 
@@ -119,6 +120,21 @@ impl Default for HashCounts {
     fn default() -> Self {
         Self { entries: Vec::new() }
     }
+}
+
+// Heartbeat response from /api/heartbeat
+#[derive(Debug, Deserialize, Clone)]
+struct HeartbeatResponse {
+    #[serde(rename = "SYSTEM")]
+    system: SystemInfo,
+    #[serde(rename = "METADATA_SOURCES")]
+    metadata_sources: HashMap<String, bool>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct SystemInfo {
+    #[serde(rename = "VERSION")]
+    version: String,
 }
 
 // Per-platform data from /api/platforms
@@ -288,6 +304,37 @@ impl Display for HashCounts {
     }
 }
 
+// Heartbeat: ROMM version and metadata sources
+impl Display for HeartbeatResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let _ = write!(f, "# HELP romm_version_info ROMM server version string\n");
+        let _ = write!(f, "# TYPE romm_version_info gauge\n");
+        let _ = write!(f, "romm_version_info{{version=\"{}\"}} 1\n", self.system.version);
+
+        // romm_any_metadata_source_enabled
+        let any_enabled = self.metadata_sources.get("ANY_SOURCE_ENABLED").copied().unwrap_or(false);
+        let _ = write!(f, "# HELP romm_any_metadata_source_enabled 1 if any metadata source is enabled in RomM config, 0 otherwise.\n");
+        let _ = write!(f, "# TYPE romm_any_metadata_source_enabled gauge\n");
+        let _ = write!(f, "romm_any_metadata_source_enabled {}\n", if any_enabled { "1" } else { "0" });
+
+        // romm_metadata_source_enabled per source (keys ending with _API_ENABLED)
+        let _ = write!(f, "# HELP romm_metadata_source_enabled 1 if metadata source integration is enabled in RomM config, 0 otherwise.\n");
+        let _ = write!(f, "# TYPE romm_metadata_source_enabled gauge\n");
+        for (key, val) in &self.metadata_sources {
+            if key == "ANY_SOURCE_ENABLED" {
+                continue;
+            }
+            let upper_key = key.to_uppercase();
+            if upper_key.ends_with("_API_ENABLED") {
+                let source = &key.to_lowercase()[0..key.len() - "_API_ENABLED".len()];
+                let _ = write!(f, "romm_metadata_source_enabled{{source=\"{}\"}} {}\n", source, if *val { "1" } else { "0" });
+            }
+        }
+
+        Ok(())
+    }
+}
+
 
 pub struct ApiClient {
     client: Client,
@@ -367,6 +414,25 @@ impl ApiClient {
         } else {
             let error_text = String::from("hello");
             Err(format!("Platforms failed with status {}: {}", response.status(), error_text).into())
+        }
+    }
+
+    // Fetch /api/heartbeat for version and system info
+    async fn heartbeat(&self) -> Result<HeartbeatResponse, Box<dyn Error>> {
+        let url = format!("{}/api/heartbeat", self.base_url);
+
+        let response = self.client
+            .get(url)
+            .basic_auth(self.auth_username.to_string(), Some(self.auth_password.to_string()))
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            let data: HeartbeatResponse = response.json().await?;
+            Ok(data)
+        } else {
+            let error_text = String::from("hello");
+            Err(format!("Heartbeat failed with status {}: {}", response.status(), error_text).into())
         }
     }
 
@@ -650,6 +716,12 @@ async fn fetch_all_metrics(username: &str, password: &str, base_url: &str) -> St
         Err(_) => StatsResponse::default(),
     };
 
+    // Fetch heartbeat (version)
+    let heartbeat = match api.heartbeat().await {
+        Ok(h) => h.clone(),
+        Err(_) => HeartbeatResponse { system: SystemInfo { version: String::from("unknown") }, metadata_sources: HashMap::new() },
+    };
+
     // Fetch platforms
     let platforms = match api.platforms().await {
         Ok(p) => p.clone(),
@@ -663,13 +735,14 @@ async fn fetch_all_metrics(username: &str, password: &str, base_url: &str) -> St
     };
 
     let stats_metrics: String = stats.to_string().to_string();
+    let heartbeat_metrics: String = heartbeat.to_string().to_string();
     let platforms_metrics: String = platforms.to_string().to_string();
     let rom_categories_metrics: String = rom_cats.to_string().to_string();
     let file_structure_metrics: String = file_struct.to_string().to_string();
     let manual_counts_metrics: String = manual_counts.to_string().to_string();
     let integrity_metrics: String = integrity_counts.to_string().to_string();
     let hash_metrics: String = hash_counts.to_string().to_string();
-    stats_metrics + "\n" + &platforms_metrics + "\n" + &rom_categories_metrics + "\n" + &file_structure_metrics + "\n" + &manual_counts_metrics + "\n" + &integrity_metrics + "\n" + &hash_metrics
+    stats_metrics + "\n" + &heartbeat_metrics + "\n" + &platforms_metrics + "\n" + &rom_categories_metrics + "\n" + &file_structure_metrics + "\n" + &manual_counts_metrics + "\n" + &integrity_metrics + "\n" + &hash_metrics
 }
 
 // Simple handler: returns the latest pre-fetched metrics from the background task
